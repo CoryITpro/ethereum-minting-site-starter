@@ -10,33 +10,46 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./ERC721Pausable.sol";
 
-contract CryptoAthletes is ERC721Enumerable, Ownable, ERC721Burnable, ERC721Pausable {
+contract Collection is ERC721Enumerable, Ownable, ERC721Burnable, ERC721Pausable {
 
     using SafeMath for uint256;
     using Counters for Counters.Counter;
 
     Counters.Counter private _tokenIdTracker;
 
-    uint256 private constant PRICE_PER_CA = 5 * 10**16; // 0.05ETH Per Crypto Athletes
+    bool public SALE_OPEN = false;
 
-    uint256 private constant MAX_ELEMENTS_CROWDSALE = 1 * 10**4 + 20; // 10020 Crypto Athletes in CrowdSale
-    uint256 private constant MAX_ELEMENTS_PRESALE = 5 * 10**2; // 500 Crypto Athletes in PreSale
+    uint256 private constant PRICE = 69 * 10**15; // 0.069ETH Per Nipple
+    uint256 private constant PRICE_PRESALE = 5 * 10**16; // 0.05ETH Per Nipple
+    uint256 private constant PRICE_PREMINT = 0; // Free Per Nipple
 
-    uint256 private constant MAX_MINT_CROWDSALE = 20; // Upper Limit is 10 in CrowdSale
-    uint256 private constant MAX_MINT_PRESALE = 5; // Upper Limit is 2 in PreSale
+    uint256 private constant MAX_ELEMENTS = 4444; // 4444 Nipples for Entire Collection.
+    uint256 private constant MAX_ELEMENTS_PRESALE = 444; // 444 Nipples for Pre Sale.
+    uint256 private constant MAX_ELEMENTS_PREMINT = 30; // 30 Nipples for GiveAway.
+
+    uint256 private constant MAX_MINT = 20; // Upper Limit per Mint is 20
+    uint256 private constant MAX_MINT_PRESALE = 5; // Upper Limit per Mint is 5
+    uint256 private constant MAX_MINT_PREMINT = 28; // Upper Limit per Mint is 28
+
+    uint256 private _price;
+    uint256 private _maxElements;
+    uint256 private _maxMint;
 
     mapping(uint256 => bool) private _isOccupiedId;
     uint256[] private _occupiedList;
 
-    uint256 private maxSalesAmount;
-    uint256 private maxMintAmount;
+    mapping(address => bool) public _whitelist;
+    bool private _isPresale;
 
     string private baseTokenURI;
 
-    event CreateCryptoAthletes(address to, uint256 indexed id);
+    event OnePieceCreated(address to, uint256 indexed id);
 
     modifier saleIsOpen {
-        require(_totalSupply() <= maxSalesAmount, "SALES: Sale end");
+        if (_msgSender() != owner()) {
+            require(SALE_OPEN == true, "SALES: Please wait a big longer before buying Nipples ;)");
+        }
+        require(_totalSupply() <= MAX_ELEMENTS, "SALES: Sale end");
 
         if (_msgSender() != owner()) {
             require(!paused(), "PAUSABLE: Paused");
@@ -44,21 +57,28 @@ contract CryptoAthletes is ERC721Enumerable, Ownable, ERC721Burnable, ERC721Paus
         _;
     }
 
-    constructor (string memory baseURI) ERC721("CryptoAthletes", "CATH") {
+    constructor (string memory baseURI) ERC721("Nippleverse", "NIP") {
         setBaseURI(baseURI);
-        pause(true);
 
-        maxSalesAmount = MAX_ELEMENTS_CROWDSALE;
-        maxMintAmount = MAX_MINT_CROWDSALE;
+        _price = PRICE_PREMINT;
+        _maxElements = MAX_ELEMENTS_PREMINT;
+        _maxMint = MAX_MINT_PREMINT;
     }
 
     function mint(address payable _to, uint256[] memory _ids) public payable saleIsOpen {
         uint256 total = _totalSupply();
 
-        require(total + _ids.length <= maxSalesAmount, "MINT: Current count exceeds maximum element count.");
-        require(total <= maxSalesAmount, "MINT: Please go to the Opensea to buy Crypto Athletes.");
-        require(_ids.length <= maxMintAmount, "MINT: Current count exceeds maximum mint count.");
-        require(msg.value >= price(_ids.length), "MINT: Current value is below the sales price of Crypto Athletes");
+        if (_isPresale == true) {
+            require(_whitelist[_to] == true, "PRESALE: Only registered customers can mint!");
+        }
+
+        require(total + _ids.length <= _maxElements, "MINT: Current count exceeds maximum element count.");
+        require(total <= _maxElements, "MINT: Please go to the Opensea to buy NippleVerse.");
+        require(_ids.length <= _maxMint, "MINT: Current count exceeds maximum mint count.");
+
+        if (_to != owner()) {
+            require(msg.value >= price(_ids.length), "MINT: Current value is below the sales price of NippleVerse");
+        }
 
         for (uint256 i = 0; i < _ids.length; i++) {
             require(_isOccupiedId[_ids[i]] == false, "MINT: Those ids already have been used for other customers");
@@ -77,29 +97,51 @@ contract CryptoAthletes is ERC721Enumerable, Ownable, ERC721Burnable, ERC721Paus
         _isOccupiedId[_id] = true;
         _occupiedList.push(_id);
 
-        emit CreateCryptoAthletes(_to, _id);
+        emit OnePieceCreated(_to, _id);
+    }
+
+    function startPreSale() public onlyOwner {
+        _isPresale = true;
+
+        SALE_OPEN = true;
+
+        _price = PRICE_PRESALE;
+        _maxElements = MAX_ELEMENTS_PRESALE + MAX_ELEMENTS_PREMINT;
+        _maxMint = MAX_MINT_PRESALE;
+    }
+
+    function startPublicSale() public onlyOwner {
+        _isPresale = false;
+
+        SALE_OPEN = true;
+
+        _price = PRICE;
+        _maxElements = MAX_ELEMENTS;
+        _maxMint = MAX_MINT;
+    }
+
+    function flipSaleState() public onlyOwner {
+        SALE_OPEN = !SALE_OPEN;
+    }
+
+    function addToWhitelist(address attender) public onlyOwner {
+        _whitelist[attender] = true;
+    }
+
+    function removeFromWhitelist(address attender) public onlyOwner {
+        _whitelist[attender] = false;
     }
 
     function setBaseURI(string memory baseURI) public onlyOwner {
         baseTokenURI = baseURI;
     }
 
-    function startPreSale() public onlyOwner {
-        maxSalesAmount = MAX_ELEMENTS_PRESALE;
-        maxMintAmount = MAX_MINT_PRESALE;
-    }
-
-    function stopPreSale() public onlyOwner {
-        maxSalesAmount = MAX_ELEMENTS_CROWDSALE;
-        maxMintAmount = MAX_MINT_CROWDSALE;
-    }
-
     function _baseURI() internal view virtual override returns (string memory) {
         return baseTokenURI;
     }
 
-    function price(uint256 _count) public pure returns (uint256) {
-        return PRICE_PER_CA.mul(_count);
+    function price(uint256 _count) public view returns (uint256) {
+        return _price.mul(_count);
     }
 
     function _totalSupply() internal view returns (uint) {
@@ -107,15 +149,19 @@ contract CryptoAthletes is ERC721Enumerable, Ownable, ERC721Burnable, ERC721Paus
     }
 
     function occupiedList() public view returns (uint256[] memory) {
-      return _occupiedList;
+        return _occupiedList;
     }
 
     function maxMint() public view returns (uint256) {
-        return maxMintAmount;
+        return _maxMint;
     }
 
     function maxSales() public view returns (uint256) {
-        return maxSalesAmount;
+        return _maxElements;
+    }
+
+    function maxSupply() public pure returns (uint256) {
+        return MAX_ELEMENTS;
     }
 
     function raised() public view returns (uint256) {
@@ -132,16 +178,6 @@ contract CryptoAthletes is ERC721Enumerable, Ownable, ERC721Burnable, ERC721Paus
         }
 
         return tokensId;
-    }
-
-    function pause(bool value) public onlyOwner {
-        if (value == true) {
-            _pause();
-
-            return;
-        }
-
-        _unpause();
     }
 
     function withdrawAll() public payable onlyOwner {
