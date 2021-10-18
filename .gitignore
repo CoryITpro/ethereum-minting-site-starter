@@ -5,6 +5,9 @@
 /.pnp
 .pnp.js
 
+# package lock file
+package-lock.json
+
 # testing
 /coverage
 
@@ -21,3 +24,9 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# environment variables
+.env
+
+# firebase debug log
+firebase-debug.log
